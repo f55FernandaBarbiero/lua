@@ -75,6 +75,7 @@ local State = {
     Character = nil,
     Humanoid = nil,
     Root = nil,
+    NoclipHeight = nil,
     OriginalWalkSpeed = 16,
     OriginalJumpPower = 50,
 
@@ -283,6 +284,7 @@ local function refreshCharacter(character)
     State.Character = character
     State.Humanoid = character:FindFirstChildOfClass("Humanoid")
     State.Root = character:FindFirstChild("HumanoidRootPart")
+    State.NoclipHeight = nil
 
     State.TargetModel = nil
     State.TargetRoot = nil
@@ -310,6 +312,10 @@ local function refreshCharacter(character)
 
     if not State.Root then
         State.Root = character:WaitForChild("HumanoidRootPart", 5)
+    end
+
+    if Config.Noclip and State.Root then
+        State.NoclipHeight = State.Root.Position.Y
     end
 
     if State.Humanoid then
@@ -2621,7 +2627,7 @@ local buttonDescriptions = {
     [godModeButton] = {"God Mode", "Pentest control that restores Humanoid health locally after received damage."},
     [speedButton] = {"Speed Test", "Tests whether the server accepts a client WalkSpeed of 80 without Auto Farm."},
     [jumpButton] = {"Jump Test", "Tests whether the server accepts a client JumpPower of 120 without Auto Farm."},
-    [noclipButton] = {"Noclip Test", "Disables local character collisions without requiring Auto Farm."},
+    [noclipButton] = {"Noclip Test", "Disables collisions and locks the activation height so the character does not fall."},
     [teleportPortalButton] = {"Nearest Exit", "Uses the existing portal/door selection logic to move toward the detected exit."},
     [autoAvoidButton] = {"Auto Avoid", "Uses the existing danger detection to move away from incoming red attacks."},
     [performanceButton] = {"Performance", "Uses the existing lower-work mode intended to reduce client load."},
@@ -2764,6 +2770,13 @@ end)
 connect(noclipButton.MouseButton1Click, function()
     Config.Noclip = not Config.Noclip
     _G.Noclip = Config.Noclip
+
+    if Config.Noclip and State.Root then
+        State.NoclipHeight = State.Root.Position.Y
+    else
+        State.NoclipHeight = nil
+    end
+
     if State.Character then
         for _, object in ipairs(State.Character:GetDescendants()) do
             if object:IsA("BasePart") then
@@ -3039,6 +3052,27 @@ connect(RunService.Heartbeat, function(dt)
                 end
                 object.CanCollide = false
             end
+        end
+
+        if State.Root and State.Root.Parent then
+            if State.NoclipHeight == nil then
+                State.NoclipHeight = State.Root.Position.Y
+            end
+
+            local position = State.Root.Position
+            local rotation = State.Root.CFrame - position
+            State.Root.CFrame = CFrame.new(
+                position.X,
+                State.NoclipHeight,
+                position.Z
+            ) * rotation
+
+            local velocity = State.Root.AssemblyLinearVelocity
+            State.Root.AssemblyLinearVelocity = Vector3.new(
+                velocity.X,
+                0,
+                velocity.Z
+            )
         end
     end
 
