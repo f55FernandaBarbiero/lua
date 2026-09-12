@@ -39,7 +39,7 @@ local Config = {
 
     TargetRefresh = 0.20,
     PortalRefresh = 1.00,
-    SkillInterval = 1.50,
+    SkillInterval = 0.50,
     RoomClearRadius = 140,
     RoomClearDelay = 1.25,
     TargetSearchRadius = 600,
@@ -49,7 +49,7 @@ local Config = {
     ExitRetryDelay = 0.75,
 
     MovementInterval = 1 / 30,
-    AttackInterval = 0.09,
+    AttackInterval = 0.05,
     StatusInterval = 0.20,
     GroundSampleInterval = 0.10,
     TestWalkSpeed = 80,
