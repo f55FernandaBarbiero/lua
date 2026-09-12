@@ -13,6 +13,7 @@ local Config = {
     AutoFarm = false,
     AutoSkill = true,
     AutoAttack = true,
+    KillAura = false,
     GodMode = false,
     SpeedHack = false,
     JumpHack = false,
@@ -40,7 +41,7 @@ local Config = {
 
     TargetRefresh = 0.20,
     PortalRefresh = 1.00,
-    SkillInterval = 1.50,
+    SkillInterval = 2.50,
     RoomClearRadius = 140,
     RoomClearDelay = 1.25,
     TargetSearchRadius = 600,
@@ -60,6 +61,7 @@ local Config = {
 _G.AutoFarm = Config.AutoFarm
 _G.AutoSkill = Config.AutoSkill
 _G.AutoAttack = Config.AutoAttack
+_G.KillAura = Config.KillAura
 _G.GodMode = Config.GodMode
 _G.SpeedHack = Config.SpeedHack
 _G.JumpHack = Config.JumpHack
@@ -153,6 +155,7 @@ local function syncConfigGlobals()
     _G.AutoFarm = Config.AutoFarm
     _G.AutoSkill = Config.AutoSkill
     _G.AutoAttack = Config.AutoAttack
+    _G.KillAura = Config.KillAura
     _G.GodMode = Config.GodMode
     _G.SpeedHack = Config.SpeedHack
     _G.JumpHack = Config.JumpHack
@@ -174,6 +177,7 @@ local function getSaveData()
         AutoFarm = Config.AutoFarm,
         AutoSkill = Config.AutoSkill,
         AutoAttack = Config.AutoAttack,
+        KillAura = Config.KillAura,
         GodMode = Config.GodMode,
         SpeedHack = Config.SpeedHack,
         JumpHack = Config.JumpHack,
@@ -221,7 +225,7 @@ local function loadSettings()
 
         if type(data) == "table" then
             for _, key in ipairs({
-                "AutoFarm", "AutoSkill", "AutoAttack", "GodMode", "SpeedHack", "JumpHack", "Noclip", "FreezeEnemies", "AutoAvoid", "Debug",
+                "AutoFarm", "AutoSkill", "AutoAttack", "KillAura", "GodMode", "SpeedHack", "JumpHack", "Noclip", "FreezeEnemies", "AutoAvoid", "Debug",
                 "AutoProgressStage", "OrbitRadius", "OrbitSpeed",
                 "AboveHeight", "UndergroundHeight", "UndergroundMode",
                 "KillAuraRadius", "TargetSearchRadius", "DoorInteractDistance", "DoorOpenWait", "ExitSearchRadius", "ExitRetryDelay", "PerformanceMode", "SafeMode",
@@ -1512,8 +1516,7 @@ local function updateOrbit(dt)
 end
 
 local function updateKillAura()
-    if not Config.AutoFarm
-        or not Config.AutoAttack
+    if not (Config.KillAura or (Config.AutoFarm and Config.AutoAttack))
         or State.StageBusy
         or not State.Root
         or not targetIsValid() then
@@ -2021,28 +2024,29 @@ local speedButton = createButton("SPEED TEST                       OFF", 240, 40
 local jumpButton = createButton("JUMP TEST                         OFF", 286, 40)
 local noclipButton = createButton("NOCLIP TEST                     OFF", 332, 40)
 local freezeEnemiesButton = createButton("FREEZE ENEMIES              OFF", 378, 40)
-local autoAvoidButton = createButton("AUTO AVOID                     OFF", 424, 40)
-local emergencyButton = createButton("EMERGENCY ESCAPE          ON", 470, 40)
+local killAuraButton = createButton("KILL AURA                         OFF", 424, 40)
+local autoAvoidButton = createButton("AUTO AVOID                     OFF", 470, 40)
+local emergencyButton = createButton("EMERGENCY ESCAPE          ON", 516, 40)
 
-createSection(520, "TRAVEL", "STAGE")
-local teleportPortalButton = createButton("NEAREST EXIT                  READY", 542, 40)
+createSection(566, "TRAVEL", "STAGE")
+local teleportPortalButton = createButton("NEAREST EXIT                  READY", 588, 40)
 
-createSection(598, "PERFORMANCE & SAFETY", "SYSTEM")
-local performanceButton = createButton("PERFORMANCE                   OFF", 620, 40)
-local safeModeButton = createButton("SAFE MODE                       ON", 666, 40)
+createSection(644, "PERFORMANCE & SAFETY", "SYSTEM")
+local performanceButton = createButton("PERFORMANCE                   OFF", 666, 40)
+local safeModeButton = createButton("SAFE MODE                       ON", 712, 40)
 
-createSection(716, "VERTICAL CONTROL", "HEIGHT")
-local aboveInput = createInput("UPPER HEIGHT", "default: 8", 738)
+createSection(762, "VERTICAL CONTROL", "HEIGHT")
+local aboveInput = createInput("UPPER HEIGHT", "default: 8", 784)
 aboveInput.Text = tostring(Config.AboveHeight)
-local undergroundInput = createInput("UNDER HEIGHT", "default: 8", 790)
+local undergroundInput = createInput("UNDER HEIGHT", "default: 8", 836)
 undergroundInput.Text = tostring(Config.UndergroundHeight)
 
-createSection(842, "DEBUG", "DIAGNOSTICS")
-local debugButton = createButton("DEBUG MONITOR                OFF", 864, 40)
+createSection(888, "DEBUG", "DIAGNOSTICS")
+local debugButton = createButton("DEBUG MONITOR                OFF", 910, 40)
 
 local statusPanel = Instance.new("Frame")
 statusPanel.Size = UDim2.new(1, -28, 0, 120)
-statusPanel.Position = UDim2.fromOffset(14, 916)
+statusPanel.Position = UDim2.fromOffset(14, 962)
 statusPanel.BackgroundColor3 = Color3.fromRGB(17, 17, 23)
 statusPanel.BorderSizePixel = 0
 statusPanel.Parent = content
@@ -2082,7 +2086,7 @@ statusText.Parent = statusPanel
 
 local debugPanel = Instance.new("Frame")
 debugPanel.Size = UDim2.new(1, -28, 0, 82)
-debugPanel.Position = UDim2.fromOffset(14, 1046)
+debugPanel.Position = UDim2.fromOffset(14, 1092)
 debugPanel.BackgroundColor3 = Color3.fromRGB(14, 14, 19)
 debugPanel.BorderSizePixel = 0
 debugPanel.Parent = content
@@ -2120,7 +2124,7 @@ debugPanelText.TextXAlignment = Enum.TextXAlignment.Left
 debugPanelText.TextYAlignment = Enum.TextYAlignment.Top
 debugPanelText.Parent = debugPanel
 
-content.CanvasSize = UDim2.fromOffset(0, 1140)
+content.CanvasSize = UDim2.fromOffset(0, 1186)
 
 -- ================================================================
 -- APPEARANCE WINDOW
@@ -2458,6 +2462,10 @@ local function setFreezeEnemiesVisual()
     paintButton(freezeEnemiesButton, freezeEnemiesButton:FindFirstChildOfClass("UIStroke"), "FREEZE ENEMIES", Config.FreezeEnemies and "ON" or "OFF", Config.FreezeEnemies)
 end
 
+local function setKillAuraVisual()
+    paintButton(killAuraButton, killAuraButton:FindFirstChildOfClass("UIStroke"), "KILL AURA", Config.KillAura and "ON" or "OFF", Config.KillAura)
+end
+
 local function setDebugVisual()
     paintButton(debugButton, debugButton:FindFirstChildOfClass("UIStroke"), "DEBUG MONITOR", Config.Debug and "ON" or "OFF", Config.Debug)
     debugPanel.Visible = Config.Debug
@@ -2679,6 +2687,7 @@ local buttonDescriptions = {
     [jumpButton] = {"Jump Test", "Tests whether the server accepts a client JumpPower of 120 without Auto Farm."},
     [noclipButton] = {"Noclip Test", "Disables collisions and locks the activation height so the character does not fall."},
     [freezeEnemiesButton] = {"Freeze Enemies", "Attempts to stop detected NPCs locally; player characters are excluded."},
+    [killAuraButton] = {"Kill Aura", "Attacks detected NPCs inside the configured radius without requiring Auto Farm."},
     [teleportPortalButton] = {"Nearest Exit", "Uses the existing portal/door selection logic to move toward the detected exit."},
     [autoAvoidButton] = {"Auto Avoid", "Uses the existing danger detection to move away from incoming red attacks."},
     [performanceButton] = {"Performance", "Uses the existing lower-work mode intended to reduce client load."},
@@ -2855,6 +2864,22 @@ connect(freezeEnemiesButton.MouseButton1Click, function()
     end
 
     setFreezeEnemiesVisual()
+    saveSettings()
+end)
+
+connect(killAuraButton.MouseButton1Click, function()
+    Config.KillAura = not Config.KillAura
+    _G.KillAura = Config.KillAura
+    State.TargetTimer = Config.TargetRefresh
+    State.AttackTimer = 0
+
+    if Config.KillAura then
+        State.StageBusy = false
+        State.DoorBusy = false
+        refreshTarget()
+    end
+
+    setKillAuraVisual()
     saveSettings()
 end)
 
@@ -3154,10 +3179,29 @@ connect(RunService.Heartbeat, function(dt)
         updateStatusPanel()
     end
 
+    -- Standalone Kill Aura: target scanning and attacks continue with Auto Farm OFF.
+    if Config.KillAura
+        and State.Character
+        and State.Root
+        and State.Humanoid
+        and State.Humanoid.Health > 0 then
+        State.TargetTimer += dt
+        if State.TargetTimer >= Config.TargetRefresh then
+            State.TargetTimer = 0
+            refreshTarget()
+        end
+
+        State.AttackTimer += dt
+        if State.AttackTimer >= Config.AttackInterval then
+            State.AttackTimer = 0
+            updateKillAura()
+        end
+    end
+
     if not Config.AutoFarm then
         State.WatchdogTimer = 0
         State.StageBusyTimer = 0
-        State.CurrentAction = "Idle"
+        State.CurrentAction = Config.KillAura and "Kill Aura" or "Idle"
         return
     end
 
@@ -3221,16 +3265,18 @@ connect(RunService.Heartbeat, function(dt)
         )
     end
 
-    State.TargetTimer += dt
+    if not Config.KillAura then
+        State.TargetTimer += dt
 
-    local targetInterval =
-        Config.PerformanceMode
-        and math.max(Config.TargetRefresh, 0.25)
-        or math.min(Config.TargetRefresh, 0.50)
+        local targetInterval =
+            Config.PerformanceMode
+            and math.max(Config.TargetRefresh, 0.25)
+            or math.min(Config.TargetRefresh, 0.50)
 
-    if State.TargetTimer >= targetInterval then
-        State.TargetTimer = 0
-        refreshTarget()
+        if State.TargetTimer >= targetInterval then
+            State.TargetTimer = 0
+            refreshTarget()
+        end
     end
 
     State.PortalTimer += dt
@@ -3275,10 +3321,12 @@ connect(RunService.Heartbeat, function(dt)
         -- Keep combat position independent of the slower scans.
         lockCombatPosition()
 
-        State.AttackTimer += dt
-        if State.AttackTimer >= Config.AttackInterval then
-            State.AttackTimer = 0
-            updateKillAura()
+        if not Config.KillAura then
+            State.AttackTimer += dt
+            if State.AttackTimer >= Config.AttackInterval then
+                State.AttackTimer = 0
+                updateKillAura()
+            end
         end
 
         State.CurrentAction = "Farming"
@@ -3337,6 +3385,7 @@ setSpeedVisual()
 setJumpVisual()
 setNoclipVisual()
 setFreezeEnemiesVisual()
+setKillAuraVisual()
 setAutoAvoidVisual()
 setPerformanceVisual()
 setSafeModeVisual()
