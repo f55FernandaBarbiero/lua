@@ -14,6 +14,7 @@ local Config = {
     AutoSkill = true,
     AutoAttack = true,
     GodMode = false,
+    GodHealth = 1000000000,
     AutoAvoid = false,
     AutoProgressStage = true,
     SaveSettings = true,
@@ -67,6 +68,7 @@ local State = {
     Character = nil,
     Humanoid = nil,
     Root = nil,
+    OriginalMaxHealth = nil,
 
     TargetModel = nil,
     TargetRoot = nil,
@@ -295,6 +297,17 @@ local function refreshCharacter(character)
         State.Root = character:WaitForChild("HumanoidRootPart", 5)
     end
 
+    if State.Humanoid then
+        State.OriginalMaxHealth = State.Humanoid.MaxHealth
+
+        if Config.GodMode then
+            pcall(function()
+                State.Humanoid.MaxHealth = Config.GodHealth
+                State.Humanoid.Health = Config.GodHealth
+            end)
+        end
+    end
+
     local function configurePart(object)
         if object:IsA("BasePart") then
             object.CanCollide = false
@@ -367,9 +380,10 @@ local function installHealthWatcher()
     local previous = humanoid.Health
 
     connectCharacter(humanoid.HealthChanged, function(health)
-        if Config.GodMode and health > 0 and health < humanoid.MaxHealth then
-            humanoid.Health = humanoid.MaxHealth
-            previous = humanoid.MaxHealth
+        if Config.GodMode and health > 0 and health < Config.GodHealth then
+            humanoid.MaxHealth = Config.GodHealth
+            humanoid.Health = Config.GodHealth
+            previous = Config.GodHealth
             return
         end
 
@@ -2681,8 +2695,16 @@ connect(godModeButton.MouseButton1Click, function()
     Config.GodMode = not Config.GodMode
     _G.GodMode = Config.GodMode
 
-    if Config.GodMode and State.Humanoid and State.Humanoid.Health > 0 then
-        State.Humanoid.Health = State.Humanoid.MaxHealth
+    if State.Humanoid and State.Humanoid.Health > 0 then
+        if Config.GodMode then
+            State.OriginalMaxHealth = State.OriginalMaxHealth or State.Humanoid.MaxHealth
+            State.Humanoid.MaxHealth = Config.GodHealth
+            State.Humanoid.Health = Config.GodHealth
+        else
+            local normalMax = State.OriginalMaxHealth or 100
+            State.Humanoid.MaxHealth = normalMax
+            State.Humanoid.Health = math.min(State.Humanoid.Health, normalMax)
+        end
     end
 
     setGodModeVisual()
@@ -2925,9 +2947,14 @@ connect(RunService.Heartbeat, function(dt)
     if Config.GodMode
         and State.Humanoid
         and State.Humanoid.Parent
-        and State.Humanoid.Health > 0
-        and State.Humanoid.Health < State.Humanoid.MaxHealth then
-        State.Humanoid.Health = State.Humanoid.MaxHealth
+        and State.Humanoid.Health > 0 then
+        if State.Humanoid.MaxHealth ~= Config.GodHealth then
+            State.Humanoid.MaxHealth = Config.GodHealth
+        end
+
+        if State.Humanoid.Health < Config.GodHealth then
+            State.Humanoid.Health = Config.GodHealth
+        end
     end
 
     State.StatusTimer += dt
