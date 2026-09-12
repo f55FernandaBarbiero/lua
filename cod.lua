@@ -17,6 +17,7 @@ local Config = {
     SpeedHack = false,
     JumpHack = false,
     Noclip = false,
+    FreezeEnemies = false,
     AutoAvoid = false,
     AutoProgressStage = true,
     SaveSettings = true,
@@ -39,7 +40,7 @@ local Config = {
 
     TargetRefresh = 0.20,
     PortalRefresh = 1.00,
-    SkillInterval = 0.50,
+    SkillInterval = 1.50,
     RoomClearRadius = 140,
     RoomClearDelay = 1.25,
     TargetSearchRadius = 600,
@@ -49,7 +50,7 @@ local Config = {
     ExitRetryDelay = 0.75,
 
     MovementInterval = 1 / 30,
-    AttackInterval = 0.05,
+    AttackInterval = 0.10,
     StatusInterval = 0.20,
     GroundSampleInterval = 0.10,
     TestWalkSpeed = 80,
@@ -63,6 +64,7 @@ _G.GodMode = Config.GodMode
 _G.SpeedHack = Config.SpeedHack
 _G.JumpHack = Config.JumpHack
 _G.Noclip = Config.Noclip
+_G.FreezeEnemies = Config.FreezeEnemies
 _G.AutoAvoid = Config.AutoAvoid
 _G.AutoProgressStage = Config.AutoProgressStage
 _G.OrbitRadius = Config.OrbitRadius
@@ -123,6 +125,7 @@ local State = {
     DoorCooldown = false,
     StageBusyTimer = 0,
     WatchdogTimer = 0,
+    FreezeTimer = 0,
     FallbackTargetTimer = 0,
     Stats = {
         Heartbeats = 0,
@@ -141,6 +144,7 @@ local State = {
 local Connections = {}
 local CharacterConnections = {}
 local OriginalCollisions = setmetatable({}, {__mode = "k"})
+local FrozenEnemyState = setmetatable({}, {__mode = "k"})
 
 
 local SETTINGS_FILE = "IronSoulSettings.json"
@@ -153,6 +157,7 @@ local function syncConfigGlobals()
     _G.SpeedHack = Config.SpeedHack
     _G.JumpHack = Config.JumpHack
     _G.Noclip = Config.Noclip
+    _G.FreezeEnemies = Config.FreezeEnemies
     _G.AutoAvoid = Config.AutoAvoid
     _G.AutoProgressStage = Config.AutoProgressStage
     _G.OrbitRadius = Config.OrbitRadius
@@ -173,6 +178,7 @@ local function getSaveData()
         SpeedHack = Config.SpeedHack,
         JumpHack = Config.JumpHack,
         Noclip = Config.Noclip,
+        FreezeEnemies = Config.FreezeEnemies,
         AutoAvoid = Config.AutoAvoid,
         AutoProgressStage = Config.AutoProgressStage,
         OrbitRadius = Config.OrbitRadius,
@@ -215,7 +221,7 @@ local function loadSettings()
 
         if type(data) == "table" then
             for _, key in ipairs({
-                "AutoFarm", "AutoSkill", "AutoAttack", "GodMode", "SpeedHack", "JumpHack", "Noclip", "AutoAvoid", "Debug",
+                "AutoFarm", "AutoSkill", "AutoAttack", "GodMode", "SpeedHack", "JumpHack", "Noclip", "FreezeEnemies", "AutoAvoid", "Debug",
                 "AutoProgressStage", "OrbitRadius", "OrbitSpeed",
                 "AboveHeight", "UndergroundHeight", "UndergroundMode",
                 "KillAuraRadius", "TargetSearchRadius", "DoorInteractDistance", "DoorOpenWait", "ExitSearchRadius", "ExitRetryDelay", "PerformanceMode", "SafeMode",
@@ -599,6 +605,45 @@ end
 
 connect(workspace.DescendantAdded, addEnemyCandidate)
 connect(workspace.DescendantRemoving, removeEnemyCandidate)
+
+local function restoreFrozenEnemies()
+    for model, saved in pairs(FrozenEnemyState) do
+        local humanoid = saved.Humanoid
+        if model and model.Parent and humanoid and humanoid.Parent then
+            humanoid.WalkSpeed = saved.WalkSpeed
+            humanoid.JumpPower = saved.JumpPower
+            humanoid.AutoRotate = saved.AutoRotate
+        end
+        FrozenEnemyState[model] = nil
+    end
+end
+
+local function freezeDetectedEnemies()
+    for model in pairs(enemyCandidates) do
+        if looksLikeEnemyModel(model) then
+            local humanoid = model:FindFirstChildOfClass("Humanoid")
+            local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+
+            if humanoid and root and humanoid.Health > 0 then
+                if not FrozenEnemyState[model] then
+                    FrozenEnemyState[model] = {
+                        Humanoid = humanoid,
+                        WalkSpeed = humanoid.WalkSpeed,
+                        JumpPower = humanoid.JumpPower,
+                        AutoRotate = humanoid.AutoRotate,
+                    }
+                end
+
+                humanoid.WalkSpeed = 0
+                humanoid.JumpPower = 0
+                humanoid.AutoRotate = false
+                humanoid:Move(Vector3.zero)
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+            end
+        end
+    end
+end
 
 local fallbackOverlapParams = OverlapParams.new()
 fallbackOverlapParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -1975,28 +2020,29 @@ local godModeButton = createButton("GOD MODE                         OFF", 194, 
 local speedButton = createButton("SPEED TEST                       OFF", 240, 40)
 local jumpButton = createButton("JUMP TEST                         OFF", 286, 40)
 local noclipButton = createButton("NOCLIP TEST                     OFF", 332, 40)
-local autoAvoidButton = createButton("AUTO AVOID                     OFF", 378, 40)
-local emergencyButton = createButton("EMERGENCY ESCAPE          ON", 424, 40)
+local freezeEnemiesButton = createButton("FREEZE ENEMIES              OFF", 378, 40)
+local autoAvoidButton = createButton("AUTO AVOID                     OFF", 424, 40)
+local emergencyButton = createButton("EMERGENCY ESCAPE          ON", 470, 40)
 
-createSection(474, "TRAVEL", "STAGE")
-local teleportPortalButton = createButton("NEAREST EXIT                  READY", 496, 40)
+createSection(520, "TRAVEL", "STAGE")
+local teleportPortalButton = createButton("NEAREST EXIT                  READY", 542, 40)
 
-createSection(552, "PERFORMANCE & SAFETY", "SYSTEM")
-local performanceButton = createButton("PERFORMANCE                   OFF", 574, 40)
-local safeModeButton = createButton("SAFE MODE                       ON", 620, 40)
+createSection(598, "PERFORMANCE & SAFETY", "SYSTEM")
+local performanceButton = createButton("PERFORMANCE                   OFF", 620, 40)
+local safeModeButton = createButton("SAFE MODE                       ON", 666, 40)
 
-createSection(670, "VERTICAL CONTROL", "HEIGHT")
-local aboveInput = createInput("UPPER HEIGHT", "default: 8", 692)
+createSection(716, "VERTICAL CONTROL", "HEIGHT")
+local aboveInput = createInput("UPPER HEIGHT", "default: 8", 738)
 aboveInput.Text = tostring(Config.AboveHeight)
-local undergroundInput = createInput("UNDER HEIGHT", "default: 8", 744)
+local undergroundInput = createInput("UNDER HEIGHT", "default: 8", 790)
 undergroundInput.Text = tostring(Config.UndergroundHeight)
 
-createSection(796, "DEBUG", "DIAGNOSTICS")
-local debugButton = createButton("DEBUG MONITOR                OFF", 818, 40)
+createSection(842, "DEBUG", "DIAGNOSTICS")
+local debugButton = createButton("DEBUG MONITOR                OFF", 864, 40)
 
 local statusPanel = Instance.new("Frame")
 statusPanel.Size = UDim2.new(1, -28, 0, 120)
-statusPanel.Position = UDim2.fromOffset(14, 870)
+statusPanel.Position = UDim2.fromOffset(14, 916)
 statusPanel.BackgroundColor3 = Color3.fromRGB(17, 17, 23)
 statusPanel.BorderSizePixel = 0
 statusPanel.Parent = content
@@ -2036,7 +2082,7 @@ statusText.Parent = statusPanel
 
 local debugPanel = Instance.new("Frame")
 debugPanel.Size = UDim2.new(1, -28, 0, 82)
-debugPanel.Position = UDim2.fromOffset(14, 1000)
+debugPanel.Position = UDim2.fromOffset(14, 1046)
 debugPanel.BackgroundColor3 = Color3.fromRGB(14, 14, 19)
 debugPanel.BorderSizePixel = 0
 debugPanel.Parent = content
@@ -2074,7 +2120,7 @@ debugPanelText.TextXAlignment = Enum.TextXAlignment.Left
 debugPanelText.TextYAlignment = Enum.TextYAlignment.Top
 debugPanelText.Parent = debugPanel
 
-content.CanvasSize = UDim2.fromOffset(0, 1094)
+content.CanvasSize = UDim2.fromOffset(0, 1140)
 
 -- ================================================================
 -- APPEARANCE WINDOW
@@ -2408,6 +2454,10 @@ local function setNoclipVisual()
     paintButton(noclipButton, noclipButton:FindFirstChildOfClass("UIStroke"), "NOCLIP TEST", Config.Noclip and "ON" or "OFF", Config.Noclip)
 end
 
+local function setFreezeEnemiesVisual()
+    paintButton(freezeEnemiesButton, freezeEnemiesButton:FindFirstChildOfClass("UIStroke"), "FREEZE ENEMIES", Config.FreezeEnemies and "ON" or "OFF", Config.FreezeEnemies)
+end
+
 local function setDebugVisual()
     paintButton(debugButton, debugButton:FindFirstChildOfClass("UIStroke"), "DEBUG MONITOR", Config.Debug and "ON" or "OFF", Config.Debug)
     debugPanel.Visible = Config.Debug
@@ -2628,6 +2678,7 @@ local buttonDescriptions = {
     [speedButton] = {"Speed Test", "Tests whether the server accepts a client WalkSpeed of 80 without Auto Farm."},
     [jumpButton] = {"Jump Test", "Tests whether the server accepts a client JumpPower of 120 without Auto Farm."},
     [noclipButton] = {"Noclip Test", "Disables collisions and locks the activation height so the character does not fall."},
+    [freezeEnemiesButton] = {"Freeze Enemies", "Attempts to stop detected NPCs locally; player characters are excluded."},
     [teleportPortalButton] = {"Nearest Exit", "Uses the existing portal/door selection logic to move toward the detected exit."},
     [autoAvoidButton] = {"Auto Avoid", "Uses the existing danger detection to move away from incoming red attacks."},
     [performanceButton] = {"Performance", "Uses the existing lower-work mode intended to reduce client load."},
@@ -2789,6 +2840,21 @@ connect(noclipButton.MouseButton1Click, function()
         end
     end
     setNoclipVisual()
+    saveSettings()
+end)
+
+connect(freezeEnemiesButton.MouseButton1Click, function()
+    Config.FreezeEnemies = not Config.FreezeEnemies
+    _G.FreezeEnemies = Config.FreezeEnemies
+    State.FreezeTimer = 0
+
+    if Config.FreezeEnemies then
+        freezeDetectedEnemies()
+    else
+        restoreFrozenEnemies()
+    end
+
+    setFreezeEnemiesVisual()
     saveSettings()
 end)
 
@@ -3076,6 +3142,12 @@ connect(RunService.Heartbeat, function(dt)
         end
     end
 
+    State.FreezeTimer += dt
+    if Config.FreezeEnemies and State.FreezeTimer >= 0.15 then
+        State.FreezeTimer = 0
+        freezeDetectedEnemies()
+    end
+
     State.StatusTimer += dt
     if State.StatusTimer >= Config.StatusInterval then
         State.StatusTimer = 0
@@ -3229,6 +3301,7 @@ local function unload()
     end
 
     State.Unloaded = true
+    restoreFrozenEnemies()
     Config.AutoFarm = false
     _G.AutoFarm = false
 
@@ -3263,6 +3336,7 @@ setGodModeVisual()
 setSpeedVisual()
 setJumpVisual()
 setNoclipVisual()
+setFreezeEnemiesVisual()
 setAutoAvoidVisual()
 setPerformanceVisual()
 setSafeModeVisual()
