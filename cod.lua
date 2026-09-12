@@ -13,8 +13,10 @@ local Config = {
     AutoFarm = false,
     AutoSkill = true,
     AutoAttack = true,
-    GodMode = true,
-    GodHealth = 10000000000000000000000000000000000000,
+    GodMode = false,
+    SpeedHack = false,
+    JumpHack = false,
+    Noclip = false,
     AutoAvoid = false,
     AutoProgressStage = true,
     SaveSettings = true,
@@ -50,12 +52,17 @@ local Config = {
     AttackInterval = 0.10,
     StatusInterval = 0.20,
     GroundSampleInterval = 0.10,
+    TestWalkSpeed = 80,
+    TestJumpPower = 120,
 }
 
 _G.AutoFarm = Config.AutoFarm
 _G.AutoSkill = Config.AutoSkill
 _G.AutoAttack = Config.AutoAttack
 _G.GodMode = Config.GodMode
+_G.SpeedHack = Config.SpeedHack
+_G.JumpHack = Config.JumpHack
+_G.Noclip = Config.Noclip
 _G.AutoAvoid = Config.AutoAvoid
 _G.AutoProgressStage = Config.AutoProgressStage
 _G.OrbitRadius = Config.OrbitRadius
@@ -68,7 +75,8 @@ local State = {
     Character = nil,
     Humanoid = nil,
     Root = nil,
-    OriginalMaxHealth = nil,
+    OriginalWalkSpeed = 16,
+    OriginalJumpPower = 50,
 
     TargetModel = nil,
     TargetRoot = nil,
@@ -131,6 +139,7 @@ local State = {
 
 local Connections = {}
 local CharacterConnections = {}
+local OriginalCollisions = setmetatable({}, {__mode = "k"})
 
 
 local SETTINGS_FILE = "IronSoulSettings.json"
@@ -140,6 +149,9 @@ local function syncConfigGlobals()
     _G.AutoSkill = Config.AutoSkill
     _G.AutoAttack = Config.AutoAttack
     _G.GodMode = Config.GodMode
+    _G.SpeedHack = Config.SpeedHack
+    _G.JumpHack = Config.JumpHack
+    _G.Noclip = Config.Noclip
     _G.AutoAvoid = Config.AutoAvoid
     _G.AutoProgressStage = Config.AutoProgressStage
     _G.OrbitRadius = Config.OrbitRadius
@@ -157,6 +169,9 @@ local function getSaveData()
         AutoSkill = Config.AutoSkill,
         AutoAttack = Config.AutoAttack,
         GodMode = Config.GodMode,
+        SpeedHack = Config.SpeedHack,
+        JumpHack = Config.JumpHack,
+        Noclip = Config.Noclip,
         AutoAvoid = Config.AutoAvoid,
         AutoProgressStage = Config.AutoProgressStage,
         OrbitRadius = Config.OrbitRadius,
@@ -199,7 +214,7 @@ local function loadSettings()
 
         if type(data) == "table" then
             for _, key in ipairs({
-                "AutoFarm", "AutoSkill", "AutoAttack", "GodMode", "AutoAvoid", "Debug",
+                "AutoFarm", "AutoSkill", "AutoAttack", "GodMode", "SpeedHack", "JumpHack", "Noclip", "AutoAvoid", "Debug",
                 "AutoProgressStage", "OrbitRadius", "OrbitSpeed",
                 "AboveHeight", "UndergroundHeight", "UndergroundMode",
                 "KillAuraRadius", "TargetSearchRadius", "DoorInteractDistance", "DoorOpenWait", "ExitSearchRadius", "ExitRetryDelay", "PerformanceMode", "SafeMode",
@@ -298,19 +313,18 @@ local function refreshCharacter(character)
     end
 
     if State.Humanoid then
-        State.OriginalMaxHealth = State.Humanoid.MaxHealth
-
-        if Config.GodMode then
-            pcall(function()
-                State.Humanoid.MaxHealth = Config.GodHealth
-                State.Humanoid.Health = Config.GodHealth
-            end)
-        end
+        State.OriginalWalkSpeed = State.Humanoid.WalkSpeed
+        State.OriginalJumpPower = State.Humanoid.JumpPower
     end
 
     local function configurePart(object)
         if object:IsA("BasePart") then
-            object.CanCollide = false
+            if OriginalCollisions[object] == nil then
+                OriginalCollisions[object] = object.CanCollide
+            end
+            if Config.Noclip or Config.AutoFarm then
+                object.CanCollide = false
+            end
         end
     end
 
@@ -380,10 +394,9 @@ local function installHealthWatcher()
     local previous = humanoid.Health
 
     connectCharacter(humanoid.HealthChanged, function(health)
-        if Config.GodMode and health > 0 and health < Config.GodHealth then
-            humanoid.MaxHealth = Config.GodHealth
-            humanoid.Health = Config.GodHealth
-            previous = Config.GodHealth
+        if Config.GodMode and health > 0 and health < humanoid.MaxHealth then
+            humanoid.Health = humanoid.MaxHealth
+            previous = humanoid.MaxHealth
             return
         end
 
@@ -1953,28 +1966,31 @@ local modeButton = createButton("POSITION                         UNDER", 76, 40
 createSection(126, "COMBAT", "TARGETING")
 local autoAttackButton = createButton("AUTO ATTACK                    ON", 148, 40)
 local godModeButton = createButton("GOD MODE                         OFF", 194, 40)
-local autoAvoidButton = createButton("AUTO AVOID                     OFF", 240, 40)
-local emergencyButton = createButton("EMERGENCY ESCAPE          ON", 286, 40)
+local speedButton = createButton("SPEED TEST                       OFF", 240, 40)
+local jumpButton = createButton("JUMP TEST                         OFF", 286, 40)
+local noclipButton = createButton("NOCLIP TEST                     OFF", 332, 40)
+local autoAvoidButton = createButton("AUTO AVOID                     OFF", 378, 40)
+local emergencyButton = createButton("EMERGENCY ESCAPE          ON", 424, 40)
 
-createSection(336, "TRAVEL", "STAGE")
-local teleportPortalButton = createButton("NEAREST EXIT                  READY", 358, 40)
+createSection(474, "TRAVEL", "STAGE")
+local teleportPortalButton = createButton("NEAREST EXIT                  READY", 496, 40)
 
-createSection(414, "PERFORMANCE & SAFETY", "SYSTEM")
-local performanceButton = createButton("PERFORMANCE                   OFF", 436, 40)
-local safeModeButton = createButton("SAFE MODE                       ON", 482, 40)
+createSection(552, "PERFORMANCE & SAFETY", "SYSTEM")
+local performanceButton = createButton("PERFORMANCE                   OFF", 574, 40)
+local safeModeButton = createButton("SAFE MODE                       ON", 620, 40)
 
-createSection(532, "VERTICAL CONTROL", "HEIGHT")
-local aboveInput = createInput("UPPER HEIGHT", "default: 8", 554)
+createSection(670, "VERTICAL CONTROL", "HEIGHT")
+local aboveInput = createInput("UPPER HEIGHT", "default: 8", 692)
 aboveInput.Text = tostring(Config.AboveHeight)
-local undergroundInput = createInput("UNDER HEIGHT", "default: 8", 606)
+local undergroundInput = createInput("UNDER HEIGHT", "default: 8", 744)
 undergroundInput.Text = tostring(Config.UndergroundHeight)
 
-createSection(658, "DEBUG", "DIAGNOSTICS")
-local debugButton = createButton("DEBUG MONITOR                OFF", 680, 40)
+createSection(796, "DEBUG", "DIAGNOSTICS")
+local debugButton = createButton("DEBUG MONITOR                OFF", 818, 40)
 
 local statusPanel = Instance.new("Frame")
 statusPanel.Size = UDim2.new(1, -28, 0, 120)
-statusPanel.Position = UDim2.fromOffset(14, 732)
+statusPanel.Position = UDim2.fromOffset(14, 870)
 statusPanel.BackgroundColor3 = Color3.fromRGB(17, 17, 23)
 statusPanel.BorderSizePixel = 0
 statusPanel.Parent = content
@@ -2014,7 +2030,7 @@ statusText.Parent = statusPanel
 
 local debugPanel = Instance.new("Frame")
 debugPanel.Size = UDim2.new(1, -28, 0, 82)
-debugPanel.Position = UDim2.fromOffset(14, 862)
+debugPanel.Position = UDim2.fromOffset(14, 1000)
 debugPanel.BackgroundColor3 = Color3.fromRGB(14, 14, 19)
 debugPanel.BorderSizePixel = 0
 debugPanel.Parent = content
@@ -2052,7 +2068,7 @@ debugPanelText.TextXAlignment = Enum.TextXAlignment.Left
 debugPanelText.TextYAlignment = Enum.TextYAlignment.Top
 debugPanelText.Parent = debugPanel
 
-content.CanvasSize = UDim2.fromOffset(0, 956)
+content.CanvasSize = UDim2.fromOffset(0, 1094)
 
 -- ================================================================
 -- APPEARANCE WINDOW
@@ -2374,6 +2390,18 @@ local function setGodModeVisual()
     paintButton(godModeButton, godModeButton:FindFirstChildOfClass("UIStroke"), "GOD MODE", Config.GodMode and "ON" or "OFF", Config.GodMode)
 end
 
+local function setSpeedVisual()
+    paintButton(speedButton, speedButton:FindFirstChildOfClass("UIStroke"), "SPEED TEST", Config.SpeedHack and "ON" or "OFF", Config.SpeedHack)
+end
+
+local function setJumpVisual()
+    paintButton(jumpButton, jumpButton:FindFirstChildOfClass("UIStroke"), "JUMP TEST", Config.JumpHack and "ON" or "OFF", Config.JumpHack)
+end
+
+local function setNoclipVisual()
+    paintButton(noclipButton, noclipButton:FindFirstChildOfClass("UIStroke"), "NOCLIP TEST", Config.Noclip and "ON" or "OFF", Config.Noclip)
+end
+
 local function setDebugVisual()
     paintButton(debugButton, debugButton:FindFirstChildOfClass("UIStroke"), "DEBUG MONITOR", Config.Debug and "ON" or "OFF", Config.Debug)
     debugPanel.Visible = Config.Debug
@@ -2591,6 +2619,9 @@ local buttonDescriptions = {
     [modeButton] = {"Combat Position", "UNDER keeps the character below the target. ABOVE keeps it above the target."},
     [autoAttackButton] = {"Auto Attack", "Automatically attacks a valid nearby target when enabled."},
     [godModeButton] = {"God Mode", "Pentest control that restores Humanoid health locally after received damage."},
+    [speedButton] = {"Speed Test", "Tests whether the server accepts a client WalkSpeed of 80 without Auto Farm."},
+    [jumpButton] = {"Jump Test", "Tests whether the server accepts a client JumpPower of 120 without Auto Farm."},
+    [noclipButton] = {"Noclip Test", "Disables local character collisions without requiring Auto Farm."},
     [teleportPortalButton] = {"Nearest Exit", "Uses the existing portal/door selection logic to move toward the detected exit."},
     [autoAvoidButton] = {"Auto Avoid", "Uses the existing danger detection to move away from incoming red attacks."},
     [performanceButton] = {"Performance", "Uses the existing lower-work mode intended to reduce client load."},
@@ -2657,6 +2688,13 @@ connect(toggleButton.MouseButton1Click, function()
             State.Root.AssemblyLinearVelocity = Vector3.zero
             State.Root.AssemblyAngularVelocity = Vector3.zero
         end
+        if not Config.Noclip and State.Character then
+            for _, object in ipairs(State.Character:GetDescendants()) do
+                if object:IsA("BasePart") and OriginalCollisions[object] ~= nil then
+                    object.CanCollide = OriginalCollisions[object]
+                end
+            end
+        end
     end
     setToggleVisual()
     saveSettings()
@@ -2695,19 +2733,49 @@ connect(godModeButton.MouseButton1Click, function()
     Config.GodMode = not Config.GodMode
     _G.GodMode = Config.GodMode
 
-    if State.Humanoid and State.Humanoid.Health > 0 then
-        if Config.GodMode then
-            State.OriginalMaxHealth = State.OriginalMaxHealth or State.Humanoid.MaxHealth
-            State.Humanoid.MaxHealth = Config.GodHealth
-            State.Humanoid.Health = Config.GodHealth
-        else
-            local normalMax = State.OriginalMaxHealth or 100
-            State.Humanoid.MaxHealth = normalMax
-            State.Humanoid.Health = math.min(State.Humanoid.Health, normalMax)
-        end
+    if Config.GodMode and State.Humanoid and State.Humanoid.Health > 0 then
+        State.Humanoid.Health = State.Humanoid.MaxHealth
     end
 
     setGodModeVisual()
+    saveSettings()
+end)
+
+connect(speedButton.MouseButton1Click, function()
+    Config.SpeedHack = not Config.SpeedHack
+    _G.SpeedHack = Config.SpeedHack
+    if State.Humanoid and not Config.SpeedHack then
+        State.Humanoid.WalkSpeed = State.OriginalWalkSpeed or 16
+    end
+    setSpeedVisual()
+    saveSettings()
+end)
+
+connect(jumpButton.MouseButton1Click, function()
+    Config.JumpHack = not Config.JumpHack
+    _G.JumpHack = Config.JumpHack
+    if State.Humanoid and not Config.JumpHack then
+        State.Humanoid.JumpPower = State.OriginalJumpPower or 50
+    end
+    setJumpVisual()
+    saveSettings()
+end)
+
+connect(noclipButton.MouseButton1Click, function()
+    Config.Noclip = not Config.Noclip
+    _G.Noclip = Config.Noclip
+    if State.Character then
+        for _, object in ipairs(State.Character:GetDescendants()) do
+            if object:IsA("BasePart") then
+                if Config.Noclip or Config.AutoFarm then
+                    object.CanCollide = false
+                elseif OriginalCollisions[object] ~= nil then
+                    object.CanCollide = OriginalCollisions[object]
+                end
+            end
+        end
+    end
+    setNoclipVisual()
     saveSettings()
 end)
 
@@ -2947,13 +3015,30 @@ connect(RunService.Heartbeat, function(dt)
     if Config.GodMode
         and State.Humanoid
         and State.Humanoid.Parent
-        and State.Humanoid.Health > 0 then
-        if State.Humanoid.MaxHealth ~= Config.GodHealth then
-            State.Humanoid.MaxHealth = Config.GodHealth
-        end
+        and State.Humanoid.Health > 0
+        and State.Humanoid.Health < State.Humanoid.MaxHealth then
+        State.Humanoid.Health = State.Humanoid.MaxHealth
+    end
 
-        if State.Humanoid.Health < Config.GodHealth then
-            State.Humanoid.Health = Config.GodHealth
+    -- Independent character tests: these run even while Auto Farm is OFF.
+    if State.Humanoid and State.Humanoid.Parent and State.Humanoid.Health > 0 then
+        if Config.SpeedHack then
+            State.Humanoid.WalkSpeed = Config.TestWalkSpeed
+        end
+        if Config.JumpHack then
+            State.Humanoid.UseJumpPower = true
+            State.Humanoid.JumpPower = Config.TestJumpPower
+        end
+    end
+
+    if Config.Noclip and State.Character then
+        for _, object in ipairs(State.Character:GetDescendants()) do
+            if object:IsA("BasePart") then
+                if OriginalCollisions[object] == nil then
+                    OriginalCollisions[object] = object.CanCollide
+                end
+                object.CanCollide = false
+            end
         end
     end
 
@@ -3141,6 +3226,9 @@ setToggleVisual()
 setModeVisual()
 setAutoAttackVisual()
 setGodModeVisual()
+setSpeedVisual()
+setJumpVisual()
+setNoclipVisual()
 setAutoAvoidVisual()
 setPerformanceVisual()
 setSafeModeVisual()
