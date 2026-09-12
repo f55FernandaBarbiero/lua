@@ -1,4 +1,3 @@
-```
 local Players = game:GetService("Players")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local VirtualUser = game:GetService("VirtualUser")
@@ -3125,4 +3124,3 @@ updateStatusPanel()
 
 saveSettings()
 print("[IronSoul] loaded")
-```
